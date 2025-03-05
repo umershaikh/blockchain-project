@@ -28,7 +28,7 @@ const UserDashboard: React.FC = () => {
   const [walletType, setWalletType] = useState<"walletconnect" | "tronlink" | null>(null);
   const [walletConnectProviderInstance, setWalletConnectProviderInstance] = useState<any | null>(null);
 
-  const BASE_URL = "/";
+  const BASE_URL = "https://everydaynft.com";
 
   useEffect(() => {
     fetchProfile();
