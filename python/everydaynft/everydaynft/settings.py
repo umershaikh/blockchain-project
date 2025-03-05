@@ -28,7 +28,7 @@ SECRET_KEY = 'django-insecure-o@wst$x38*lfvjrnq8klqq@8&x$yihsq#qgqg0l%rrzvf52-ar
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['everydaynft.com','www.everydaynft.com','82,29,168,29','localhost']
+ALLOWED_HOSTS = ['everydaynft.com','www.everydaynft.com','82,29,168,29','localhost','127.0.0.1']
 #STATIC_URL = '/static/'
 #STATICFILES_DIRS = [
 #    os.path.join(BASE_DIR, 'build', 'static'),

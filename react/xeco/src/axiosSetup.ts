@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 
 // Create an axios instance with a base URL
 const axiosInstance = axios.create({
-  baseURL: "/api/",
+  baseURL: "https://everydaynft.com/api/",
   headers: {
     "Content-Type": "application/json",
   },

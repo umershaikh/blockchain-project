@@ -129,7 +129,7 @@ const RegisterForm: React.FC = () => {
     try {
       // If your backend expects combined phone, do: const full_phone = data.country_code + data.mobile_number
       // Otherwise, just send them separately
-      const res = await fetch("/api/register/", {
+      const res = await fetch("https://everydaynft.com/api/register/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -162,7 +162,7 @@ const RegisterForm: React.FC = () => {
       return;
     }
     try {
-      const res = await fetch("/api/send-verification-code/", {
+      const res = await fetch("https://everydaynft.com/api/send-verification-code/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

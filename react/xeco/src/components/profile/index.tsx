@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FaArrowUp, FaCopy } from "react-icons/fa";
+import { FaArrowUp, FaCopy, FaWallet } from "react-icons/fa";
+import { web3Modal, initWalletConnectProvider } from "../../walletConfig";
+import { ethers } from "ethers";
 
 interface MLMUserProfile {
   username: string;
@@ -21,12 +23,93 @@ const UserDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [upgrading, setUpgrading] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [walletType, setWalletType] = useState<"walletconnect" | "tronlink" | null>(null);
+  const [walletConnectProviderInstance, setWalletConnectProviderInstance] = useState<any | null>(null);
 
-  const BASE_URL = "http://127.0.0.1:8000";
+  const BASE_URL = "/";
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+
+    // Check if wallet is already connected (using local storage or WalletConnect session)
+    const checkWalletConnection = async () => {
+      try {
+        // Check for TronLink first
+        if (window.tronLink && window.tronLink.ready) {
+          const tronAddress = window.tronLink.tronWeb?.defaultAddress?.base58;
+          if (tronAddress) {
+            setWalletAddress(tronAddress);
+            setWalletType("tronlink");
+            return;
+          }
+        }
+
+        // Check for WalletConnect session in local storage
+        const session = localStorage.getItem("walletconnect");
+        if (session) {
+          const provider = await initWalletConnectProvider();
+          setWalletConnectProviderInstance(provider);
+
+          const accounts = provider.accounts;
+          if (accounts && accounts.length > 0) {
+            setWalletAddress(accounts[0]);
+            setWalletType("walletconnect");
+          }
+
+          // WalletConnect event listeners
+          provider.on("accountsChanged", handleAccountsChanged);
+          provider.on("chainChanged", handleChainChanged);
+          provider.on("disconnect", handleDisconnect);
+        }
+      } catch (err) {
+        console.log("No wallet connected on load");
+      }
+    };
+    checkWalletConnection();
+
+    // TronLink event listener (basic reconnection check)
+    const tronLinkInterval = setInterval(async () => {
+      if (window.tronLink && window.tronLink.ready && !walletAddress) {
+        const tronAddress = window.tronLink.tronWeb?.defaultAddress?.base58;
+        if (tronAddress) {
+          setWalletAddress(tronAddress);
+          setWalletType("tronlink");
+        }
+      }
+    }, 1000);
+
+    // Cleanup on unmount
+    return () => {
+      clearInterval(tronLinkInterval);
+      if (walletConnectProviderInstance) {
+        walletConnectProviderInstance.removeListener("accountsChanged", handleAccountsChanged);
+        walletConnectProviderInstance.removeListener("chainChanged", handleChainChanged);
+        walletConnectProviderInstance.removeListener("disconnect", handleDisconnect);
+      }
+    };
+  }, [walletAddress, walletConnectProviderInstance]);
+
+  const handleAccountsChanged = (accounts: string[]) => {
+    if (accounts.length > 0) {
+      setWalletAddress(accounts[0]);
+      setWalletType("walletconnect");
+    } else {
+      setWalletAddress(null);
+      setWalletType(null);
+    }
+  };
+
+  const handleChainChanged = () => {
+    // Handle chain change if needed
+  };
+
+  const handleDisconnect = () => {
+    setWalletAddress(null);
+    setWalletType(null);
+    setWalletConnectProviderInstance(null);
+  };
 
   const fetchProfile = async () => {
     try {
@@ -48,6 +131,68 @@ const UserDashboard: React.FC = () => {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConnectWallet = async () => {
+    setIsConnecting(true);
+    try {
+      // Check for TronLink first
+      if (window.tronLink) {
+        const res = await window.tronLink.request({ method: "tron_requestAccounts" });
+        if (res.code === 200) {
+          const tronAddress = window.tronLink.tronWeb?.defaultAddress?.base58;
+          if (tronAddress) {
+            setWalletAddress(tronAddress);
+            setWalletType("tronlink");
+            toast.success("Tron wallet connected successfully!");
+            return;
+          }
+        }
+      }
+
+      // Initialize WalletConnect provider
+      const provider = await initWalletConnectProvider();
+      setWalletConnectProviderInstance(provider);
+
+      // Connect to WalletConnect
+      await provider.connect();
+
+      // Fallback to WalletConnect for BSC
+      await web3Modal.open();
+      const ethersProvider = new ethers.BrowserProvider(provider);
+      const signer = await ethersProvider.getSigner();
+      const address = await signer.getAddress();
+      setWalletAddress(address);
+      setWalletType("walletconnect");
+      toast.success("Wallet connected successfully!");
+
+      // Add event listeners after connection
+      provider.on("accountsChanged", handleAccountsChanged);
+      provider.on("chainChanged", handleChainChanged);
+      provider.on("disconnect", handleDisconnect);
+    } catch (err: any) {
+      toast.error("Failed to connect wallet: " + err.message);
+    } finally {
+      setIsConnecting(false);
+      if (walletType !== "tronlink") {
+        web3Modal.close();
+      }
+    }
+  };
+
+  const handleDisconnectWallet = async () => {
+    try {
+      if (walletType === "walletconnect" && walletConnectProviderInstance) {
+        await walletConnectProviderInstance.disconnect();
+      }
+      // TronLink doesn't have a native disconnect, so we just clear the state
+      setWalletAddress(null);
+      setWalletType(null);
+      setWalletConnectProviderInstance(null);
+      toast.success("Wallet disconnected successfully!");
+    } catch (err: any) {
+      toast.error("Failed to disconnect wallet: " + err.message);
     }
   };
 
@@ -104,6 +249,46 @@ const UserDashboard: React.FC = () => {
                 <h2 className="card-title text-center mb-4" style={{ fontFamily: "'Roboto', sans-serif", fontWeight: "bold" }}>
                   Welcome, {displayName}! (Level {profile.level})
                 </h2>
+
+                {/* Wallet Connection Section */}
+                <div className="text-center mb-4">
+                  {walletAddress ? (
+                    <div>
+                      <p style={{ fontFamily: "'Roboto', sans-serif", color: "#b0bec5" }}>
+                        Connected Wallet: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                      </p>
+                      <button
+                        className="btn"
+                        onClick={handleDisconnectWallet}
+                        style={{
+                          background: "linear-gradient(to right, #ff4444, #ff6666)",
+                          color: "#ffffff",
+                          padding: "10px 20px",
+                          borderRadius: "5px",
+                          transition: "background 0.3s ease-in-out",
+                        }}
+                      >
+                        Disconnect Wallet
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn"
+                      onClick={handleConnectWallet}
+                      disabled={isConnecting}
+                      style={{
+                        background: "linear-gradient(to right, #2196F3, #64B5F6)",
+                        color: "#ffffff",
+                        padding: "10px 20px",
+                        borderRadius: "5px",
+                        transition: "background 0.3s ease-in-out",
+                      }}
+                    >
+                      <FaWallet className="me-2" />
+                      {isConnecting ? "Connecting..." : "Connect Wallet"}
+                    </button>
+                  )}
+                </div>
 
                 <h5 className="mb-4" style={{ fontFamily: "'Roboto', sans-serif", fontWeight: "500" }}>
                   Progress to Level {nextLevel}
