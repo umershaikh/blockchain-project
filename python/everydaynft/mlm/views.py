@@ -1,20 +1,24 @@
+import uuid
 from django.contrib.auth.models import User
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from mlm.utils import can_level_up
 from .models import Level, MLMUser, NFT, LevelRequirement, EmailVerification
 from rest_framework import status
-import random
+import random, requests, logging, os, string
 from rest_framework.decorators import api_view, permission_classes
-import string
 from rest_framework import views
 from rest_framework.views import APIView
-from .serializers import NFTSerializer, MLMUserSerializer
+from .serializers import NFTSerializer, MLMUserSerializer, OrderHistorySerializer
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.core.mail import send_mail
-from datetime import timedelta
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from .models import Payment
+from mlm import models
 
+load_dotenv()
 
 class LevelUpView(APIView):
     permission_classes = [IsAuthenticated]
@@ -270,3 +274,96 @@ class ProfileView(views.APIView):
             'referral_code': profile.referral_code,
         }
         return Response(data)
+    
+logger = logging.getLogger(__name__)
+
+def get_jwt_token():
+    url = "https://api.nowpayments.io/v1/auth"
+    payload = {
+        "email": os.getenv('NOWPAYMENTS_EMAIL'),
+        "password": os.getenv('NOWPAYMENTS_PASSWORD')
+    }
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+
+    if response.status_code == 200:
+        return response.json().get('token')
+    else:
+        print(response.json())
+        return None
+
+NOWPAYMENTS_API_KEY = os.getenv('NOWPAYMENTS_API_KEY')
+
+@api_view(['POST'])
+def create_payment(request):
+    amount = request.data.get('amount')
+    user_id = request.data.get('user_id')
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Generate a unique order_id (e.g., user_id-timestamp-uuid)
+    order_id = f"ORDER_{user_id}_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}"
+
+    payload = {
+        "price_amount": amount,
+        "price_currency": "usd",
+        "pay_currency": "usdttrc20",
+        "order_id": order_id,
+        "order_description": f"Deposit from User {user.username} (ID: {user_id})",
+        "success_url": f"https://everydaynft.com/profile?deposit_success=true",  # Redirect to profile with success param
+        "cancel_url": "https://everydaynft.com/cancel"
+    }
+
+    headers = {
+        'x-api-key': os.getenv('NOWPAYMENTS_API_KEY'),
+        'Content-Type': 'application/json'
+    }
+
+    response = requests.post('https://api.nowpayments.io/v1/invoice', headers=headers, json=payload)
+    print(response.status_code)
+    if response.status_code == 200:
+        data = response.json()
+        Payment.objects.create(
+            user=user,
+            order_id=order_id,
+            transaction_id=data["id"],
+            amount_usd=data["price_amount"],
+            pay_address=data.get("pay_address", ""),
+            email=user.username,
+            status="pending"
+        )
+        return Response({"payment_url": data["invoice_url"]}, status=status.HTTP_201_CREATED)
+    else:
+        return Response(response.json(), status=response.status_code)
+
+@api_view(['GET'])
+def user_balance(request):
+    user_id = request.query_params.get('user_id')
+    try:
+        user = User.objects.get(id=user_id)
+        balance = Payment.objects.filter(user=user, status='completed').aggregate(total=models.Sum('amount_usd'))['total'] or 0
+        return Response({"balance": float(balance)}, status=status.HTTP_200_OK)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+def payment_callback(request):
+    data = request.data
+    order_id = data.get('order_id')
+    payment_status = data.get('payment_status')
+    blockchain_txid = data.get('transaction_id')
+
+    try:
+        payment = Payment.objects.get(order_id=order_id)
+        payment.status = payment_status
+        payment.blockchain_txid = blockchain_txid
+        payment.save()
+        return Response({"status": "success"}, status=status.HTTP_200_OK)
+    except Payment.DoesNotExist:
+        return Response({"error": "Payment not found"}, status=status.HTTP_404_NOT_FOUND)

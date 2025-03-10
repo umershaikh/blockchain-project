@@ -13,8 +13,9 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 import os
 from datetime import timedelta
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
@@ -23,12 +24,11 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-o@wst$x38*lfvjrnq8klqq@8&x$yihsq#qgqg0l%rrzvf52-ar'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['everydaynft.com','www.everydaynft.com','82,29,168,29','localhost','127.0.0.1']
+ALLOWED_HOSTS = ['https://everydaynft.com:5173/','everydaynft.com','www.everydaynft.com','localhost','127.0.0.1']
 #STATIC_URL = '/static/'
 #STATICFILES_DIRS = [
 #    os.path.join(BASE_DIR, 'build', 'static'),
@@ -36,6 +36,7 @@ ALLOWED_HOSTS = ['everydaynft.com','www.everydaynft.com','82,29,168,29','localho
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')  # This is required for collectstatic
 
+SECRET_KEY = os.getenv('SECRET_KEY', 'default-secret-key')
 STATICFILES_DIRS = []  # Empty because collectstatic will handle it
 
 # Application definition

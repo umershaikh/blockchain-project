@@ -8,6 +8,35 @@ from datetime import timedelta
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+class OrderHistory(models.Model):
+    USER_ACTIONS = (
+        ('deposit', 'Deposit'),
+        ('withdraw', 'Withdraw'),
+    )
+    CURRENCIES = (
+        ('BNB', 'BNB'),
+        ('TRX', 'TRX'),
+    )
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+    )
+
+    user_address = models.CharField(max_length=42)  # Wallet address (BSC or Tron)
+    action = models.CharField(max_length=10, choices=USER_ACTIONS)
+    amount = models.DecimalField(max_digits=18, decimal_places=8)  # Amount in BNB or TRX
+    currency = models.CharField(max_length=3, choices=CURRENCIES)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)  # Gate Pay TX ID
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.action} of {self.amount} {self.currency} for {self.user_address}"
+
+    class Meta:
+        ordering = ['-timestamp']
+
 def generate_referral_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
@@ -198,3 +227,24 @@ class Commission(models.Model):
 
     def __str__(self):
         return f"Commission #{self.id} for upline {self.upline_user.user.username}"
+    
+class Payment(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)  # Link to User model
+    order_id = models.CharField(max_length=100, unique=True)  # Unique order ID
+    transaction_id = models.CharField(max_length=100, unique=True)  # ID from nowPayments
+    blockchain_txid = models.CharField(max_length=100, blank=True, null=True)  # Blockchain transaction hash
+    amount_usd = models.DecimalField(max_digits=10, decimal_places=2)  # Deposited amount in USD
+    pay_address = models.CharField(max_length=100)  # Payment address
+    email = models.EmailField()  # User's email
+    status = models.CharField(
+        max_length=20,
+        choices=[('pending', 'Pending'), ('completed', 'Completed'), ('failed', 'Failed')],
+        default='pending'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)  # Timestamp of creation
+
+    def __str__(self):
+        return f"{self.order_id} - {self.user.username} - {self.amount_usd} USD"
+
+    class Meta:
+        ordering = ['-created_at']

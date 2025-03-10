@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import EmailVerification, Level, MLMUser, NFT, Purchase, Commission, NFTCategory, NFTLevel
+from .models import EmailVerification, Level, MLMUser, NFT, Payment, Purchase, Commission, NFTCategory, NFTLevel
 
 @admin.register(MLMUser)
 class MLMUserAdmin(admin.ModelAdmin):
@@ -37,3 +37,9 @@ class EmailVerificationAdmin(admin.ModelAdmin):
     list_filter = ('email',)
 
 admin.site.register(Level)
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ['order_id', 'user', 'amount_usd', 'email', 'status', 'created_at', 'blockchain_txid']
+    list_filter = ['status', 'created_at']
+    search_fields = ['order_id', 'user__username', 'email']

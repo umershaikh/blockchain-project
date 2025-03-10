@@ -1,8 +1,7 @@
 # mlm/serializers.py
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Level, MLMUser
-from .models import NFT
+from .models import Level, MLMUser, OrderHistory, NFT
 
 class NFTSerializer(serializers.ModelSerializer):
     class Meta:
@@ -60,3 +59,8 @@ class MLMUserSerializer(serializers.ModelSerializer):
             return level.needed_bc
         except Level.DoesNotExist:
             return 0
+
+class OrderHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderHistory
+        fields = '__all__'
